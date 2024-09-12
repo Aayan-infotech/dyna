@@ -1,11 +1,9 @@
-
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>ANS to DYNA Converter</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -20,15 +18,14 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        .logo {
-            display: block;
-            max-width: 200px;
-            margin: 0 auto;
+            position: relative;
         }
         h1 {
             color: #0056b3;
             text-align: center;
+            background: linear-gradient(45deg, #a2c2e3, #4caf50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
         textarea {
             width: calc(100% - 20px);
@@ -41,7 +38,7 @@
         button {
             padding: 10px 20px;
             font-size: 16px;
-            background-color: #0056b3;
+            background: linear-gradient(45deg, #a2c2e3, #4caf50);
             color: #fff;
             border: none;
             border-radius: 4px;
@@ -53,43 +50,95 @@
         button:hover {
             background-color: #004494;
         }
-        h2 {
+        .upload-button {
+            display: block;
+            margin: 10px auto;
+            padding: 10px;
+            font-size: 16px;
+            background: linear-gradient(45deg, #a2c2e3, #4caf50);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .upload-button input {
+            display: none;
+        }
+        .hidden {
+            display: none;
+        }
+        footer {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #e9ecef;
+            text-align: center;
+            border-radius: 8px;
+        }
+        footer h2 {
             color: #0056b3;
+        }
+        .social-links {
+            margin: 10px 0;
+        }
+        .social-links a {
+            margin: 0 10px;
+            color: #0056b3;
+            font-size: 24px;
+            text-decoration: none;
+        }
+        .social-links a:hover {
+            color: #004494;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <img src="https://aayaninfotech.com/logo.png" alt="Aayan Infotech Logo" class="logo">
-        <h1>ANS to DYNA Converter</h1>
+        <h1>Aayan Infotech</h1>
 
         <label for="ans_nlist">Enter ANS-NLIST Content:</label><br>
-        <textarea id="ans_nlist" rows="10"></textarea><br><br>
+        <textarea id="ans_nlist" rows="10"></textarea><br>
+        <label for="ans_nlist_upload">Upload ANS-NLIST File:</label><br>
+        <input type="file" id="ans_nlist_upload" class="upload-button" accept=".txt"><br><br>
 
         <label for="ans_elist">Enter ANS-ELIST Content:</label><br>
-        <textarea id="ans_elist" rows="10"></textarea><br><br>
+        <textarea id="ans_elist" rows="10"></textarea><br>
+        <label for="ans_elist_upload">Upload ANS-ELIST File:</label><br>
+        <input type="file" id="ans_elist_upload" class="upload-button" accept=".txt"><br><br>
 
         <button onclick="convertToDyna()">Convert to DYNA</button>
 
-        <h2>Converted DYNA Output:</h2>
-        <textarea id="dyna_output" rows="10" readonly></textarea><br><br>
+        <h2 class="hidden" id="resultTitle">Converted DYNA Output:</h2>
+        <textarea id="dyna_output" rows="10" readonly class="hidden"></textarea><br><br>
 
         <button onclick="downloadOutput()">Download Output as TXT</button>
     </div>
+
+    <footer>
+        <h2>Developer Information</h2>
+        <p>Developed by Aayan Infotech.</p>
+        <div class="social-links">
+            <a href="https://www.instagram.com/aayan_infotech/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="https://x.com/aayan_infotech" target="_blank" title="X"><i class="fab fa-x"></i></a>
+            <a href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://in.linkedin.com/company/aayaninfotech&ved=2ahUKEwiTjqv5qr2IAxXlRmwGHY1RMYMQFnoECB0QAQ&usg=AOvVaw2t32MqNzG289KpG9fqHG7q" target="_blank" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+        </div>
+        <p><a href="https://aayaninfotech.com" target="_blank">Visit our website</a></p>
+    </footer>
 
     <script>
         function readNodes(content) {
             const nodes = [];
             const lines = content.trim().split('\n');
+            
             lines.forEach(line => {
                 if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
                 const parts = line.trim().split(/\s+/);
-                if (parts.length === 4) { // Ensure we have exactly 4 parts: ID, X, Y, Z
+                if (parts.length >= 4) {
                     const nodeId = parseInt(parts[0]);
-                    const x = parseInt(parseFloat(parts[1]));
-                    const y = parseInt(parseFloat(parts[2]));
-                    const z = parseInt(parseFloat(parts[3]));
-                    nodes.push([nodeId, x, y, z]);
+                    const x = parseFloat(parts[1]);
+                    const y = parseFloat(parts[2]);
+                    const z = parseFloat(parts[3]);
+                    nodes.push([nodeId, x.toFixed(1), y.toFixed(1), z.toFixed(1)]);
                 }
             });
             return nodes;
@@ -98,17 +147,18 @@
         function readElements(content) {
             const elements = [];
             const lines = content.trim().split('\n');
+            
             lines.forEach(line => {
                 if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
                 const parts = line.trim().split(/\s+/);
-                if (parts.length >= 7) { // At least 7 parts for Element ID, MAT, TYP, REL, ESY, SEC, Nodes...
+                if (parts.length >= 7) {
                     const elementId = parts[0];
                     const mat = parts[1];
                     const typ = parts[2];
                     const rel = parts[3];
                     const esy = parts[4];
                     const sec = parts[5];
-                    const nodes = parts.slice(6).map(n => parseInt(n)); // Convert all nodes to integers
+                    const nodes = parts.slice(6);
                     elements.push([elementId, mat, typ, rel, esy, sec, nodes]);
                 }
             });
@@ -119,41 +169,72 @@
             const ansNlistContent = document.getElementById('ans_nlist').value;
             const ansElistContent = document.getElementById('ans_elist').value;
 
+            if (!ansNlistContent || !ansElistContent) {
+                alert("Please provide both ANS-NLIST and ANS-ELIST content.");
+                return;
+            }
+
             const nodes = readNodes(ansNlistContent);
             const elements = readElements(ansElistContent);
 
             let output = [];
             output.push("*NODE");
+            
             nodes.forEach(node => {
                 const [nodeId, x, y, z] = node;
                 output.push(`${nodeId},${x},${y},${z}`);
             });
 
             output.push("\n*ELEMENT_SHELL");
+            
             elements.forEach(element => {
                 const [elementId, , , , , , elemNodes] = element;
                 const nodesStr = elemNodes.join(',');
                 output.push(`${elementId},${nodesStr}`);
             });
 
-            // Additional MAT entries for *MAT_ELASTIC
+            // Generate MAT entries once per material number with default properties
             let matNumbers = new Set(elements.map(el => el[1]));
             matNumbers.forEach(mat => {
-                output.push(`\n*MAT_ELASTIC\n${mat},0.00785,205000,0.3,1000,2000,0.5,0.015,4.0,0.12,0.`);
+                output.push(`\n${mat},0.00785,205000,0.3,1000,2000,0.5,0.015,4.0,0.12,0.`);
             });
 
             document.getElementById('dyna_output').value = output.join('\n');
+            document.getElementById('resultTitle').classList.remove('hidden');
+            document.getElementById('dyna_output').classList.remove('hidden');
         }
 
         function downloadOutput() {
             const output = document.getElementById('dyna_output').value;
-            const blob = new Blob([output], { type: 'text/plain' });
+            const developerInfo = "Developed by Aayan Infotech.\n\n";
+            const blob = new Blob([developerInfo + output], { type: 'text/plain' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'dyna_output.txt';
             link.click();
             URL.revokeObjectURL(link.href); // Clean up
         }
+
+        function handleFileUpload(event, textareaId) {
+            const file = event.target.files[0];
+            if (file && file.type === 'text/plain') {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById(textareaId).value = e.target.result;
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Please upload a valid text file.');
+            }
+        }
+
+        document.getElementById('ans_nlist_upload').addEventListener('change', function(event) {
+            handleFileUpload(event, 'ans_nlist');
+        });
+
+        document.getElementById('ans_elist_upload').addEventListener('change', function(event) {
+            handleFileUpload(event, 'ans_elist');
+        });
     </script>
 </body>
 </html>
