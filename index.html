@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ANS to DYNA Converter</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+        h1 {
+            color: #0056b3;
+            text-align: center;
+            background: linear-gradient(45deg, #a2c2e3, #4caf50);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        textarea {
+            width: calc(100% - 20px);
+            box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: linear-gradient(45deg, #a2c2e3, #4caf50);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            display: block;
+            margin: 10px auto;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #004494;
+        }
+        .upload-button {
+            display: block;
+            margin: 10px auto;
+            padding: 10px;
+            font-size: 16px;
+            background: linear-gradient(45deg, #a2c2e3, #4caf50);
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+        }
+        .upload-button input {
+            display: none;
+        }
+        .hidden {
+            display: none;
+        }
+        footer {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #e9ecef;
+            text-align: center;
+            border-radius: 8px;
+        }
+        footer h2 {
+            color: #0056b3;
+        }
+        .social-links {
+            margin: 10px 0;
+        }
+        .social-links a {
+            margin: 0 10px;
+            color: #0056b3;
+            font-size: 24px;
+            text-decoration: none;
+        }
+        .social-links a:hover {
+            color: #004494;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Aayan Infotech</h1>
+
+        <label for="ans_nlist">Enter ANS-NLIST Content:</label><br>
+        <textarea id="ans_nlist" rows="10"></textarea><br>
+        <label for="ans_nlist_upload">Upload ANS-NLIST File:</label><br>
+        <input type="file" id="ans_nlist_upload" class="upload-button" accept=".txt"><br><br>
+
+        <label for="ans_elist">Enter ANS-ELIST Content:</label><br>
+        <textarea id="ans_elist" rows="10"></textarea><br>
+        <label for="ans_elist_upload">Upload ANS-ELIST File:</label><br>
+        <input type="file" id="ans_elist_upload" class="upload-button" accept=".txt"><br><br>
+
+        <label for="ans_constraints">Enter Node Constraints:</label><br>
+        <textarea id="ans_constraints" rows="5"></textarea><br>
+        <label for="ans_constraints_upload">Upload Constraints File:</label><br>
+        <input type="file" id="ans_constraints_upload" class="upload-button" accept=".txt"><br><br>
+
+        <label for="ans_materials">Enter Material Data:</label><br>
+        <textarea id="ans_materials" rows="5"></textarea><br>
+        <label for="ans_materials_upload">Upload Material File:</label><br>
+        <input type="file" id="ans_materials_upload" class="upload-button" accept=".txt"><br><br>
+
+        <label for="ans_parts">Enter Part Data:</label><br>
+        <textarea id="ans_parts" rows="5"></textarea><br>
+        <label for="ans_parts_upload">Upload Part File:</label><br>
+        <input type="file" id="ans_parts_upload" class="upload-button" accept=".txt"><br><br>
+
+        <button onclick="convertToDyna()">Convert to DYNA</button>
+
+        <h2 class="hidden" id="resultTitle">Converted DYNA Output:</h2>
+        <textarea id="dyna_output" rows="10" readonly class="hidden"></textarea><br><br>
+
+        <button onclick="downloadOutput()">Download Output as TXT</button>
+    </div>
+
+    <footer>
+        <h2>Developer Information</h2>
+        <p>Developed by Aayan Infotech.</p>
+        <div class="social-links">
+            <a href="https://www.instagram.com/aayan_infotech/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="https://x.com/aayan_infotech" target="_blank" title="X"><i class="fab fa-x"></i></a>
+            <a href="https://in.linkedin.com/company/aayaninfotech" target="_blank" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+        </div>
+        <p><a href="https://aayaninfotech.com" target="_blank">Visit our website</a></p>
+    </footer>
+
+    <script>
+        function readNodes(content) {
+            const nodes = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 4) {
+                    const nodeId = parseInt(parts[0]);
+                    const x = parseFloat(parts[1]);
+                    const y = parseFloat(parts[2]);
+                    const z = parseFloat(parts[3]);
+                    nodes.push([nodeId, x.toFixed(1), y.toFixed(1), z.toFixed(1)]);
+                }
+            });
+            return nodes;
+        }
+
+        function readElements(content) {
+            const elements = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 7) {
+                    const elementId = parts[0];
+                    const mat = parts[1];
+                    const typ = parts[2];
+                    const rel = parts[3];
+                    const esy = parts[4];
+                    const sec = parts[5];
+                    const nodes = parts.slice(6);
+                    elements.push([elementId, mat, typ, rel, esy, sec, nodes]);
+                }
+            });
+            return elements;
+        }
+
+        function readConstraints(content) {
+            const constraints = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    const nodeId = parts[0];
+                    const constraint = parts.slice(1).join(',');
+                    constraints.push([nodeId, constraint]);
+                }
+            });
+            return constraints;
+        }
+
+        function readMaterials(content) {
+            const materials = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 6) {
+                    materials.push(parts);
+                }
+            });
+            return materials;
+        }
+
+        function readParts(content) {
+            const parts = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const partsData = line.trim().split(/\s+/);
+                parts.push(partsData);
+            });
+            return parts;
+        }
+
+        function convertToDyna() {
+            const ansNlistContent = document.getElementById('ans_nlist').value;
+            const ansElistContent = document.getElementById('ans_elist').value;
+            const ansConstraintsContent = document.getElementById('ans_constraints').value;
+            const ansMaterialsContent = document.getElementById('ans_materials').value;
+            const ansPartsContent = document.getElementById('ans_parts').value;
+
+            const nodes = readNodes(ansNlistContent);
+            const elements = readElements(ansElistContent);
+            const constraints = readConstraints(ansConstraintsContent);
+            const materials = readMaterials(ansMaterialsContent);
+            const parts = readParts(ansPartsContent);
+
+            let dynaOutput = '*NODE\n';
+            nodes.forEach(node => {
+                dynaOutput += `${node[0]}, ${node[1]}, ${node[2]}, ${node[3]}\n`;
+            });
+
+            dynaOutput += '*ELEMENT_SOLID\n';
+            elements.forEach(element => {
+                dynaOutput += `${element[0]}, ${element[1]}, ${element[2]}, ${element[3]}, ${element[4]}, ${element[5]}, ${element[6].join(',')}\n`;
+            });
+
+            dynaOutput += '*BOUNDARY_SPC_NODE\n';
+            constraints.forEach(constraint => {
+                dynaOutput += `${constraint[0]}, ${constraint[1]}\n`;
+            });
+
+            dynaOutput += '*MAT_ELASTIC\n';
+            materials.forEach(material => {
+                dynaOutput += `${material.join(', ')}\n`;
+            });
+
+            dynaOutput += '*PART\n';
+            parts.forEach(part => {
+                dynaOutput += `${part.join(', ')}\n`;
+            });
+
+            document.getElementById('dyna_output').value = dynaOutput;
+            document.getElementById('resultTitle').classList.remove('hidden');
+            document.getElementById('dyna_output').classList.remove('hidden');
+        }
+
+        function downloadOutput() {
+            const output = document.getElementById('dyna_output').value;
+            const blob = new Blob([output], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'dyna_output.txt';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('ans_nlist_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_nlist').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_elist_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_elist').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_constraints_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_constraints').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_materials_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_materials').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_parts_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_parts').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+    </script>
+</body>
+</html>
