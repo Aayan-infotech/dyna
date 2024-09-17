@@ -106,6 +106,21 @@
         <label for="ans_elist_upload">Upload ANS-ELIST File:</label><br>
         <input type="file" id="ans_elist_upload" class="upload-button" accept=".txt"><br><br>
 
+        <label for="ans_constraints">Enter Node Constraints:</label><br>
+        <textarea id="ans_constraints" rows="5"></textarea><br>
+        <label for="ans_constraints_upload">Upload Constraints File:</label><br>
+        <input type="file" id="ans_constraints_upload" class="upload-button" accept=".txt"><br><br>
+
+        <label for="ans_materials">Enter Material Data:</label><br>
+        <textarea id="ans_materials" rows="5"></textarea><br>
+        <label for="ans_materials_upload">Upload Material File:</label><br>
+        <input type="file" id="ans_materials_upload" class="upload-button" accept=".txt"><br><br>
+
+        <label for="ans_parts">Enter Part Data:</label><br>
+        <textarea id="ans_parts" rows="5"></textarea><br>
+        <label for="ans_parts_upload">Upload Part File:</label><br>
+        <input type="file" id="ans_parts_upload" class="upload-button" accept=".txt"><br><br>
+
         <button onclick="convertToDyna()">Convert to DYNA</button>
 
         <h2 class="hidden" id="resultTitle">Converted DYNA Output:</h2>
@@ -120,7 +135,7 @@
         <div class="social-links">
             <a href="https://www.instagram.com/aayan_infotech/" target="_blank" title="Instagram"><i class="fab fa-instagram"></i></a>
             <a href="https://x.com/aayan_infotech" target="_blank" title="X"><i class="fab fa-x"></i></a>
-            <a href="https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://in.linkedin.com/company/aayaninfotech&ved=2ahUKEwiTjqv5qr2IAxXlRmwGHY1RMYMQFnoECB0QAQ&usg=AOvVaw2t32MqNzG289KpG9fqHG7q" target="_blank" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+            <a href="https://in.linkedin.com/company/aayaninfotech" target="_blank" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
         </div>
         <p><a href="https://aayaninfotech.com" target="_blank">Visit our website</a></p>
     </footer>
@@ -165,77 +180,143 @@
             return elements;
         }
 
+        function readConstraints(content) {
+            const constraints = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 2) {
+                    const nodeId = parts[0];
+                    const constraint = parts.slice(1).join(',');
+                    constraints.push([nodeId, constraint]);
+                }
+            });
+            return constraints;
+        }
+
+        function readMaterials(content) {
+            const materials = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const parts = line.trim().split(/\s+/);
+                if (parts.length >= 6) {
+                    materials.push(parts);
+                }
+            });
+            return materials;
+        }
+
+        function readParts(content) {
+            const parts = [];
+            const lines = content.trim().split('\n');
+            
+            lines.forEach(line => {
+                if (line.startsWith('!') || !line.trim()) return; // Skip comments and empty lines
+                const partsData = line.trim().split(/\s+/);
+                parts.push(partsData);
+            });
+            return parts;
+        }
+
         function convertToDyna() {
             const ansNlistContent = document.getElementById('ans_nlist').value;
             const ansElistContent = document.getElementById('ans_elist').value;
-
-            if (!ansNlistContent || !ansElistContent) {
-                alert("Please provide both ANS-NLIST and ANS-ELIST content.");
-                return;
-            }
+            const ansConstraintsContent = document.getElementById('ans_constraints').value;
+            const ansMaterialsContent = document.getElementById('ans_materials').value;
+            const ansPartsContent = document.getElementById('ans_parts').value;
 
             const nodes = readNodes(ansNlistContent);
             const elements = readElements(ansElistContent);
+            const constraints = readConstraints(ansConstraintsContent);
+            const materials = readMaterials(ansMaterialsContent);
+            const parts = readParts(ansPartsContent);
 
-            let output = [];
-            output.push("*NODE");
-            
+            let dynaOutput = '*NODE\n';
             nodes.forEach(node => {
-                const [nodeId, x, y, z] = node;
-                output.push(`${nodeId},${x},${y},${z}`);
+                dynaOutput += `${node[0]}, ${node[1]}, ${node[2]}, ${node[3]}\n`;
             });
 
-            output.push("\n*ELEMENT_SHELL");
-            
+            dynaOutput += '*ELEMENT_SOLID\n';
             elements.forEach(element => {
-                const [elementId, , , , , , elemNodes] = element;
-                const nodesStr = elemNodes.join(',');
-                output.push(`${elementId},${nodesStr}`);
+                dynaOutput += `${element[0]}, ${element[1]}, ${element[2]}, ${element[3]}, ${element[4]}, ${element[5]}, ${element[6].join(',')}\n`;
             });
 
-            // Generate MAT entries once per material number with default properties
-            let matNumbers = new Set(elements.map(el => el[1]));
-            matNumbers.forEach(mat => {
-                output.push(`\n${mat},0.00785,205000,0.3,1000,2000,0.5,0.015,4.0,0.12,0.`);
+            dynaOutput += '*BOUNDARY_SPC_NODE\n';
+            constraints.forEach(constraint => {
+                dynaOutput += `${constraint[0]}, ${constraint[1]}\n`;
             });
 
-            document.getElementById('dyna_output').value = output.join('\n');
+            dynaOutput += '*MAT_ELASTIC\n';
+            materials.forEach(material => {
+                dynaOutput += `${material.join(', ')}\n`;
+            });
+
+            dynaOutput += '*PART\n';
+            parts.forEach(part => {
+                dynaOutput += `${part.join(', ')}\n`;
+            });
+
+            document.getElementById('dyna_output').value = dynaOutput;
             document.getElementById('resultTitle').classList.remove('hidden');
             document.getElementById('dyna_output').classList.remove('hidden');
         }
 
         function downloadOutput() {
             const output = document.getElementById('dyna_output').value;
-            const developerInfo = "Developed by Aayan Infotech.\n\n";
-            const blob = new Blob([developerInfo + output], { type: 'text/plain' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'dyna_output.txt';
-            link.click();
-            URL.revokeObjectURL(link.href); // Clean up
+            const blob = new Blob([output], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = 'dyna_output.txt';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
         }
 
-        function handleFileUpload(event, textareaId) {
-            const file = event.target.files[0];
-            if (file && file.type === 'text/plain') {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById(textareaId).value = e.target.result;
-                };
-                reader.readAsText(file);
-            } else {
-                alert('Please upload a valid text file.');
-            }
-        }
-
-        document.getElementById('ans_nlist_upload').addEventListener('change', function(event) {
-            handleFileUpload(event, 'ans_nlist');
+        document.getElementById('ans_nlist_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_nlist').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
         });
 
-        document.getElementById('ans_elist_upload').addEventListener('change', function(event) {
-            handleFileUpload(event, 'ans_elist');
+        document.getElementById('ans_elist_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_elist').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_constraints_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_constraints').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_materials_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_materials').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
+        });
+
+        document.getElementById('ans_parts_upload').addEventListener('change', function (event) {
+            const reader = new FileReader();
+            reader.onload = function () {
+                document.getElementById('ans_parts').value = reader.result;
+            };
+            reader.readAsText(event.target.files[0]);
         });
     </script>
 </body>
 </html>
-
