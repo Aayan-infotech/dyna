@@ -91,11 +91,12 @@
         }
 
         function parseANSFile(content) {
-            const nodePattern = /NLIST\s*=\s*(\d+)\s*(?:([\d.-]+)\s+([\d.-]+)\s+([\d.-]+)\s*)+/gm;
-            const elementPattern = /ELIST\s*=\s*(\d+)\s*(\d+)\s*(\d+)\s*(\d+)\s*(\d+)\s*([\d, ]+)/gm;
-            const constraintPattern = /CONSTRAINT\s*=\s*(\d+)\s*([\d.-]+)/gm;
-            const materialPattern = /MAT_ELASTIC\s*=\s*([\d.-]+),\s*([\d.-]+)/gm;
-            const partPattern = /PART\s*=\s*(.+)/gm;
+            // Define regex patterns to match sections in the ANSYS file (NLIST, ELIST, etc.)
+            const nodePattern = /\bNLIST\s*=\s*(\d+)\s*([\d.-]+)\s*([\d.-]+)\s*([\d.-]+)/gm;
+            const elementPattern = /\bELIST\s*=\s*(\d+)\s*(\d+)\s*(\d+)\s*(\d+)\s*(\d+)\s*([\d, ]+)/gm;
+            const constraintPattern = /\bCONSTRAINT\s*=\s*(\d+)\s*([\d.-]+)/gm;
+            const materialPattern = /\bMAT_ELASTIC\s*=\s*(.+)/gm;
+            const partPattern = /\bPART\s*=\s*(.+)/gm;
 
             let nodes = [];
             let elements = [];
@@ -107,11 +108,7 @@
             
             // Parse nodes
             while (match = nodePattern.exec(content)) {
-                for (let i = 1; i < match.length; i += 4) {
-                    if (match[i]) {
-                        nodes.push([i, match[i], match[i + 1], match[i + 2]]);
-                    }
-                }
+                nodes.push([match[1], match[2], match[3], match[4]]);
             }
 
             // Parse elements
@@ -126,7 +123,7 @@
 
             // Parse materials
             while (match = materialPattern.exec(content)) {
-                materials.push([match[1], match[2]]);
+                materials.push(match[1].split(/\s*,\s*/));
             }
 
             // Parse parts
@@ -157,12 +154,12 @@
 
             output += '*MAT_ELASTIC\n';
             data.materials.forEach(material => {
-                output += `${material.join(', ')}\n`;
+                output += material.join(', ') + '\n';
             });
 
             output += '*PART\n';
             data.parts.forEach(part => {
-                output += `${part.join(', ')}\n`;
+                output += part.join(', ') + '\n';
             });
 
             output += '*END\n';
