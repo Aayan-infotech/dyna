@@ -7,44 +7,81 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 40px;
-            background-color: #f7f7f7;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
         }
+
         .container {
+            width: 90%;
             max-width: 800px;
-            margin: 0 auto;
+            margin: 50px auto;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
         }
+
         h1 {
             text-align: center;
             color: #333;
         }
+
+        p {
+            text-align: center;
+            color: #666;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin: 10px auto;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100%;
+        }
+
         textarea {
             width: 100%;
-            height: 300px;
-            margin-bottom: 20px;
+            height: 200px;
             padding: 10px;
+            margin: 10px 0;
             border: 1px solid #ccc;
-            font-family: monospace;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
         }
-        .btn {
-            padding: 10px 20px;
+
+        button.btn {
+            display: block;
+            width: 100%;
+            background-color: #007BFF;
             color: white;
-            background-color: #5a67d8;
             border: none;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 16px;
             cursor: pointer;
-            border-radius: 5px;
+            margin-top: 10px;
         }
-        .btn:hover {
-            background-color: #434190;
+
+        button.btn:hover {
+            background-color: #0056b3;
         }
-        .hidden {
-            display: none;
+
+        h2 {
+            margin-top: 30px;
+            text-align: center;
         }
+
         footer {
             text-align: center;
-            margin-top: 40px;
-            font-size: 12px;
-            color: #777;
+            margin-top: 20px;
+            color: #999;
+        }
+
+        .hidden {
+            display: none;
         }
     </style>
 </head>
@@ -55,7 +92,7 @@
 
         <p>Upload your full ANSYS file or paste the content below:</p>
         <input type="file" id="ans_file_upload">
-        <br><br>
+        
         <textarea id="ans_file_content" placeholder="Paste your ANSYS input file content here..."></textarea>
         
         <button class="btn" onclick="convertToDyna()">Convert to DYNA</button>
@@ -67,105 +104,141 @@
     </div>
 
     <footer>
-        &copy; 2024 ANSYS to DYNA Converter. All rights reserved.
+        &copy; 2024 Aayan Infotech ANSYS to DYNA Converter. All rights reserved.
     </footer>
 
     <script>
+        // File upload handler
         document.getElementById('ans_file_upload').addEventListener('change', function() {
             const file = this.files[0];
-            const reader = new FileReader();
-            reader.onload = function() {
-                document.getElementById('ans_file_content').value = reader.result;
-            };
-            reader.readAsText(file);
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function() {
+                    document.getElementById('ans_file_content').value = reader.result;
+                };
+                reader.readAsText(file);
+            } else {
+                alert('Please upload a valid ANSYS file.');
+            }
         });
 
+        // Convert function
         function convertToDyna() {
             const ansFileContent = document.getElementById('ans_file_content').value;
-            const parsedData = parseANSFile(ansFileContent);
-            const dynaOutput = generateDYNAOutput(parsedData);
+            if (!ansFileContent.trim()) {
+                alert('Please paste or upload ANSYS content.');
+                return;
+            }
+            try {
+                const parsedData = parseANSFile(ansFileContent);
+                const dynaOutput = generateDYNAOutput(parsedData);
+                displayOutput(dynaOutput);
+            } catch (error) {
+                alert('Error converting file: ' + error.message);
+            }
+        }
+
+        // Parse ANSYS file content
+        function parseANSFile(content) {
+            const lines = content.split('\n');
+            let nodes = [];
+            let elements = [];
+            let constraints = [];
+            let materials = [];
+            let parts = [];
+            
+            const nodePattern = /^\s*(\d+)\s+([\d\.-]+)\s+([\d\.-]+)\s+([\d\.-]+)/;
+            const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s]+)/;
+            const materialPattern = /^\*MAT_PLASTIC_KINEMATIC/;
+            const constraintPattern = /^\*BOUNDARY_SPC_SET/;
+            const partPattern = /^\*PART/;
+
+            let i = 0;
+            while (i < lines.length) {
+                let line = lines[i].trim();
+                if (line === '' || line.startsWith('!') || line.startsWith('$') || line.startsWith('/')) {
+                    i++;
+                    continue;
+                }
+                
+                let match;
+                if ((match = nodePattern.exec(line))) {
+                    nodes.push([match[1], match[2], match[3], match[4]]);
+                } else if ((match = elementPattern.exec(line))) {
+                    let nodeIds = match[7].trim().split(/\s+/);
+                    elements.push([match[1], match[2], match[3], match[4], match[5], match[6], nodeIds]);
+                } else if (materialPattern.test(line)) {
+                    let materialData = [line];
+                    i++;
+                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
+                        materialData.push(lines[i].trim());
+                        i++;
+                    }
+                    materials.push(materialData);
+                    continue;
+                } else if (constraintPattern.test(line)) {
+                    let constraintData = [line];
+                    i++;
+                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
+                        constraintData.push(lines[i].trim());
+                        i++;
+                    }
+                    constraints.push(constraintData);
+                    continue;
+                } else if (partPattern.test(line)) {
+                    let partData = [line];
+                    i++;
+                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
+                        partData.push(lines[i].trim());
+                        i++;
+                    }
+                    parts.push(partData);
+                    continue;
+                }
+                i++;
+            }
+            return { nodes, elements, constraints, materials, parts };
+        }
+
+        // Generate DYNA output based on parsed data
+        function generateDYNAOutput(data) {
+            let output = '*KEYWORD\n\n';
+            if (data.nodes.length > 0) {
+                output += '*NODE\n';
+                data.nodes.forEach(([id, x, y, z]) => {
+                    output += `${id}, ${x}, ${y}, ${z}\n`;
+                });
+                output += '\n';
+            }
+            if (data.elements.length > 0) {
+                output += '*ELEMENT_SHELL\n';
+                data.elements.forEach(([elementId, mat, typ, rel, esy, sec, nodeIds]) => {
+                    output += `${elementId}, ${mat}, ${typ}, ${rel}, ${esy}, ${sec}, ${nodeIds.join(', ')}\n`;
+                });
+                output += '\n';
+            }
+            data.materials.forEach(materialLines => {
+                output += materialLines.join('\n') + '\n\n';
+            });
+            data.constraints.forEach(constraintLines => {
+                output += constraintLines.join('\n') + '\n\n';
+            });
+            data.parts.forEach(partLines => {
+                output += partLines.join('\n') + '\n\n';
+            });
+            output += '*END\n';
+            return output;
+        }
+
+        // Display DYNA output in textarea
+        function displayOutput(dynaOutput) {
             document.getElementById('dyna_output').value = dynaOutput;
             document.getElementById('dyna_output').classList.remove('hidden');
             document.getElementById('resultTitle').classList.remove('hidden');
             document.getElementById('downloadBtn').classList.remove('hidden');
         }
 
-        function parseANSFile(content) {
-            // Define regex patterns to match sections in the ANSYS file (NLIST, ELIST, etc.)
-            const nodePattern = /\bNLIST\s*=\s*(\d+)\s*([\d.-]+)\s*([\d.-]+)\s*([\d.-]+)/gm;
-            const elementPattern = /\bELIST\s*=\s*(\d+)\s*(\d+)\s*(\d+)\s*(\d+)\s*(\d+)\s*([\d, ]+)/gm;
-            const constraintPattern = /\bCONSTRAINT\s*=\s*(\d+)\s*([\d.-]+)/gm;
-            const materialPattern = /\bMAT_ELASTIC\s*=\s*(.+)/gm;
-            const partPattern = /\bPART\s*=\s*(.+)/gm;
-
-            let nodes = [];
-            let elements = [];
-            let constraints = [];
-            let materials = [];
-            let parts = [];
-
-            let match;
-            
-            // Parse nodes
-            while (match = nodePattern.exec(content)) {
-                nodes.push([match[1], match[2], match[3], match[4]]);
-            }
-
-            // Parse elements
-            while (match = elementPattern.exec(content)) {
-                elements.push([match[1], match[2], match[3], match[4], match[5], match[6].split(/\s*,\s*/)]);
-            }
-
-            // Parse constraints
-            while (match = constraintPattern.exec(content)) {
-                constraints.push([match[1], match[2]]);
-            }
-
-            // Parse materials
-            while (match = materialPattern.exec(content)) {
-                materials.push(match[1].split(/\s*,\s*/));
-            }
-
-            // Parse parts
-            while (match = partPattern.exec(content)) {
-                parts.push(match[1].split(/\s*,\s*/));
-            }
-
-            return { nodes, elements, constraints, materials, parts };
-        }
-
-        function generateDYNAOutput(data) {
-            let output = '*KEYWORD\n';
-
-            output += '*NODE\n';
-            data.nodes.forEach(([id, x, y, z]) => {
-                output += `   ${id},  ${x}, ${y}, ${z}\n`;
-            });
-
-            output += '*ELEMENT_SOLID\n';
-            data.elements.forEach(([elementId, mat, typ, rel, esy, nodeIds]) => {
-                output += `${elementId}, ${mat}, ${typ}, ${rel}, ${esy}, ${nodeIds.join(', ')}\n`;
-            });
-
-            output += '*CONSTRAINT\n';
-            data.constraints.forEach(([nodeId, constraint]) => {
-                output += `${nodeId}, ${constraint}\n`;
-            });
-
-            output += '*MAT_ELASTIC\n';
-            data.materials.forEach(material => {
-                output += material.join(', ') + '\n';
-            });
-
-            output += '*PART\n';
-            data.parts.forEach(part => {
-                output += part.join(', ') + '\n';
-            });
-
-            output += '*END\n';
-            return output;
-        }
-
+        // Download output as .dyna file
         function downloadOutput() {
             const outputContent = document.getElementById('dyna_output').value;
             const blob = new Blob([outputContent], { type: 'text/plain' });
