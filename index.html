@@ -9,136 +9,90 @@
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
             margin: 0;
-            padding: 0;
+            padding: 20px;
         }
-
         .container {
-            width: 90%;
             max-width: 800px;
-            margin: 50px auto;
+            margin: 0 auto;
             background-color: white;
             padding: 20px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-
         h1 {
             text-align: center;
             color: #333;
         }
-
-        p {
-            text-align: center;
-            color: #666;
+        .input-group {
+            margin: 20px 0;
         }
-
-        input[type="file"] {
+        .input-group label {
             display: block;
-            margin: 10px auto;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            width: 100%;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
         }
-
+        input[type="file"],
         textarea {
             width: 100%;
-            height: 200px;
             padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 14px;
-        }
-
-        button.btn {
-            display: block;
-            width: 100%;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 4px;
             font-size: 16px;
-            cursor: pointer;
-            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
         }
-
-        button.btn:hover {
+        textarea {
+            height: 200px;
+        }
+        button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
             background-color: #0056b3;
         }
-
-        h2 {
+        pre {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .output-section {
             margin-top: 30px;
-            text-align: center;
-        }
-
-        footer {
-            text-align: center;
-            margin-top: 20px;
-            color: #999;
-        }
-
-        .hidden {
-            display: none;
         }
     </style>
 </head>
 <body>
-
     <div class="container">
         <h1>ANSYS to DYNA Converter</h1>
 
-        <p>Upload your full ANSYS file or paste the content below:</p>
-        <input type="file" id="ans_file_upload">
-        
-        <textarea id="ans_file_content" placeholder="Paste your ANSYS input file content here..."></textarea>
-        
-        <button class="btn" onclick="convertToDyna()">Convert to DYNA</button>
+        <div class="input-group">
+            <label for="fileInput">Choose ANSYS File</label>
+            <input type="file" id="fileInput" accept=".txt">
+        </div>
 
-        <h2 id="resultTitle" class="hidden">DYNA Output</h2>
-        <textarea id="dyna_output" class="hidden" readonly></textarea>
+        <div class="input-group">
+            <label for="textInput">Or Enter ANSYS Data</label>
+            <textarea id="textInput" placeholder="Paste ANSYS data here..."></textarea>
+        </div>
 
-        <button id="downloadBtn" class="btn hidden" onclick="downloadOutput()">Download .dyna File</button>
+        <button onclick="processInput()">Convert to DYNA Format</button>
+
+        <div class="output-section">
+            <h2>DYNA Output</h2>
+            <pre id="output"></pre>
+        </div>
     </div>
 
-    <footer>
-        &copy; 2024 Aayan Infotech ANSYS to DYNA Converter. All rights reserved.
-    </footer>
-
     <script>
-        // File upload handler
-        document.getElementById('ans_file_upload').addEventListener('change', function() {
-            const file = this.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function() {
-                    document.getElementById('ans_file_content').value = reader.result;
-                };
-                reader.readAsText(file);
-            } else {
-                alert('Please upload a valid ANSYS file.');
-            }
-        });
-
-        // Convert function
-        function convertToDyna() {
-            const ansFileContent = document.getElementById('ans_file_content').value;
-            if (!ansFileContent.trim()) {
-                alert('Please paste or upload ANSYS content.');
-                return;
-            }
-            try {
-                const parsedData = parseANSFile(ansFileContent);
-                const dynaOutput = generateDYNAOutput(parsedData);
-                displayOutput(dynaOutput);
-            } catch (error) {
-                alert('Error converting file: ' + error.message);
-            }
-        }
-
-        // Parse ANSYS file content
+        // Parse ANSYS file or text content
         function parseANSFile(content) {
             const lines = content.split('\n');
             let nodes = [];
@@ -146,12 +100,15 @@
             let constraints = [];
             let materials = [];
             let parts = [];
-            
+            let setNodeList = []; // For *SET_NODE_LIST
+            let boundarySPCSet = []; // For *BOUNDARY_SPC_SET
+
             const nodePattern = /^\s*(\d+)\s+([\d\.-]+)\s+([\d\.-]+)\s+([\d\.-]+)/;
             const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s]+)/;
             const materialPattern = /^\*MAT_PLASTIC_KINEMATIC/;
             const constraintPattern = /^\*BOUNDARY_SPC_SET/;
             const partPattern = /^\*PART/;
+            const setNodeListPattern = /^\*SET_NODE_LIST/; // Pattern for SET_NODE_LIST
 
             let i = 0;
             while (i < lines.length) {
@@ -160,7 +117,7 @@
                     i++;
                     continue;
                 }
-                
+
                 let match;
                 if ((match = nodePattern.exec(line))) {
                     nodes.push([match[1], match[2], match[3], match[4]]);
@@ -185,24 +142,26 @@
                     }
                     constraints.push(constraintData);
                     continue;
-                } else if (partPattern.test(line)) {
-                    let partData = [line];
+                } else if (setNodeListPattern.test(line)) {
+                    let setData = [line];
                     i++;
                     while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
-                        partData.push(lines[i].trim());
+                        setData.push(lines[i].trim());
                         i++;
                     }
-                    parts.push(partData);
+                    setNodeList.push(setData);
                     continue;
                 }
                 i++;
             }
-            return { nodes, elements, constraints, materials, parts };
+            return { nodes, elements, constraints, materials, parts, setNodeList, boundarySPCSet };
         }
 
         // Generate DYNA output based on parsed data
         function generateDYNAOutput(data) {
             let output = '*KEYWORD\n\n';
+            
+            // Add nodes
             if (data.nodes.length > 0) {
                 output += '*NODE\n';
                 data.nodes.forEach(([id, x, y, z]) => {
@@ -210,6 +169,8 @@
                 });
                 output += '\n';
             }
+
+            // Add elements as ELEMENT_SHELL
             if (data.elements.length > 0) {
                 output += '*ELEMENT_SHELL\n';
                 data.elements.forEach(([elementId, mat, typ, rel, esy, sec, nodeIds]) => {
@@ -217,35 +178,73 @@
                 });
                 output += '\n';
             }
+
+            // Add materials
             data.materials.forEach(materialLines => {
                 output += materialLines.join('\n') + '\n\n';
             });
+
+            // Add constraints (BOUNDARY_SPC_SET)
             data.constraints.forEach(constraintLines => {
                 output += constraintLines.join('\n') + '\n\n';
             });
+
+            // Add parts
             data.parts.forEach(partLines => {
                 output += partLines.join('\n') + '\n\n';
             });
+
+            // Add SET_NODE_LIST
+            if (data.setNodeList.length > 0) {
+                output += '*SET_NODE_LIST\n';
+                data.setNodeList.forEach(setLines => {
+                    output += setLines.join('\n') + '\n';
+                });
+                output += '\n';
+            }
+
+            // Add BOUNDARY_SPC_SET
+            if (data.boundarySPCSet.length > 0) {
+                output += '*BOUNDARY_SPC_SET\n';
+                data.boundarySPCSet.forEach(boundaryLines => {
+                    output += boundaryLines.join('\n') + '\n';
+                });
+                output += '\n';
+            }
+
+            // End of the file
             output += '*END\n';
+            
             return output;
         }
 
-        // Display DYNA output in textarea
-        function displayOutput(dynaOutput) {
-            document.getElementById('dyna_output').value = dynaOutput;
-            document.getElementById('dyna_output').classList.remove('hidden');
-            document.getElementById('resultTitle').classList.remove('hidden');
-            document.getElementById('downloadBtn').classList.remove('hidden');
+        // Process either file input or text input
+        function processInput() {
+            const fileInput = document.getElementById('fileInput');
+            const textInput = document.getElementById('textInput').value;
+
+            if (fileInput.files.length > 0) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const content = event.target.result;
+                    const parsedData = parseANSFile(content);
+                    const dynaContent = generateDYNAOutput(parsedData);
+                    displayOutput(dynaContent);
+                };
+                reader.readAsText(file);
+            } else if (textInput.trim() !== '') {
+                const parsedData = parseANSFile(textInput);
+                const dynaContent = generateDYNAOutput(parsedData);
+                displayOutput(dynaContent);
+            } else {
+                alert('Please either upload a file or enter ANSYS data!');
+            }
         }
 
-        // Download output as .dyna file
-        function downloadOutput() {
-            const outputContent = document.getElementById('dyna_output').value;
-            const blob = new Blob([outputContent], { type: 'text/plain' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = 'converted_output.dyna';
-            link.click();
+        // Display the generated DYNA output
+        function displayOutput(content) {
+            document.getElementById('output').textContent = content;
         }
     </script>
 </body>
