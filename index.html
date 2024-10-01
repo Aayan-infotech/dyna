@@ -97,18 +97,14 @@
             const lines = content.split('\n');
             let nodes = [];
             let elements = [];
-            let constraints = [];
-            let materials = [];
             let parts = [];
-            let setNodeList = []; // For *SET_NODE_LIST
-            let boundarySPCSet = []; // For *BOUNDARY_SPC_SET
+            let materials = [];
+            let constraints = [];
 
             const nodePattern = /^\s*(\d+)\s+([\d\.-]+)\s+([\d\.-]+)\s+([\d\.-]+)/;
-            const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s]+)/;
-            const materialPattern = /^\*MAT_PLASTIC_KINEMATIC/;
-            const constraintPattern = /^\*BOUNDARY_SPC_SET/;
+            const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s]+)/;
             const partPattern = /^\*PART/;
-            const setNodeListPattern = /^\*SET_NODE_LIST/; // Pattern for SET_NODE_LIST
+            const materialPattern = /^\*MAT_PLASTIC_KINEMATIC/;
 
             let i = 0;
             while (i < lines.length) {
@@ -122,8 +118,17 @@
                 if ((match = nodePattern.exec(line))) {
                     nodes.push([match[1], match[2], match[3], match[4]]);
                 } else if ((match = elementPattern.exec(line))) {
-                    let nodeIds = match[7].trim().split(/\s+/);
-                    elements.push([match[1], match[2], match[3], match[4], match[5], match[6], nodeIds]);
+                    let nodeIds = match[6].trim().split(/\s+/);
+                    elements.push([match[1], match[2], match[3], match[4], match[5], nodeIds]);
+                } else if (partPattern.test(line)) {
+                    let partData = [line];
+                    i++;
+                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
+                        partData.push(lines[i].trim());
+                        i++;
+                    }
+                    parts.push(partData);
+                    continue;
                 } else if (materialPattern.test(line)) {
                     let materialData = [line];
                     i++;
@@ -133,34 +138,16 @@
                     }
                     materials.push(materialData);
                     continue;
-                } else if (constraintPattern.test(line)) {
-                    let constraintData = [line];
-                    i++;
-                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
-                        constraintData.push(lines[i].trim());
-                        i++;
-                    }
-                    constraints.push(constraintData);
-                    continue;
-                } else if (setNodeListPattern.test(line)) {
-                    let setData = [line];
-                    i++;
-                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
-                        setData.push(lines[i].trim());
-                        i++;
-                    }
-                    setNodeList.push(setData);
-                    continue;
                 }
                 i++;
             }
-            return { nodes, elements, constraints, materials, parts, setNodeList, boundarySPCSet };
+            return { nodes, elements, parts, materials, constraints };
         }
 
         // Generate DYNA output based on parsed data
         function generateDYNAOutput(data) {
             let output = '*KEYWORD\n\n';
-            
+
             // Add nodes
             if (data.nodes.length > 0) {
                 output += '*NODE\n';
@@ -173,48 +160,29 @@
             // Add elements as ELEMENT_SHELL
             if (data.elements.length > 0) {
                 output += '*ELEMENT_SHELL\n';
-                data.elements.forEach(([elementId, mat, typ, rel, esy, sec, nodeIds]) => {
-                    output += `${elementId}, ${mat}, ${typ}, ${rel}, ${esy}, ${sec}, ${nodeIds.join(', ')}\n`;
+                data.elements.forEach(([elementId, mat, typ, rel, esy, nodeIds]) => {
+                    output += `${elementId}, ${mat}, ${typ}, ${rel}, ${esy}, ${nodeIds.join(', ')}\n`;
                 });
                 output += '\n';
+            }
+
+            // Add parts
+            if (data.parts.length > 0) {
+                data.parts.forEach(partLines => {
+                    output += partLines.join('\n') + '\n\n';
+                });
             }
 
             // Add materials
-            data.materials.forEach(materialLines => {
-                output += materialLines.join('\n') + '\n\n';
-            });
-
-            // Add constraints (BOUNDARY_SPC_SET)
-            data.constraints.forEach(constraintLines => {
-                output += constraintLines.join('\n') + '\n\n';
-            });
-
-            // Add parts
-            data.parts.forEach(partLines => {
-                output += partLines.join('\n') + '\n\n';
-            });
-
-            // Add SET_NODE_LIST
-            if (data.setNodeList.length > 0) {
-                output += '*SET_NODE_LIST\n';
-                data.setNodeList.forEach(setLines => {
-                    output += setLines.join('\n') + '\n';
+            if (data.materials.length > 0) {
+                data.materials.forEach(materialLines => {
+                    output += materialLines.join('\n') + '\n\n';
                 });
-                output += '\n';
-            }
-
-            // Add BOUNDARY_SPC_SET
-            if (data.boundarySPCSet.length > 0) {
-                output += '*BOUNDARY_SPC_SET\n';
-                data.boundarySPCSet.forEach(boundaryLines => {
-                    output += boundaryLines.join('\n') + '\n';
-                });
-                output += '\n';
             }
 
             // End of the file
             output += '*END\n';
-            
+
             return output;
         }
 
