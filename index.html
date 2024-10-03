@@ -12,12 +12,12 @@
             padding: 20px;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             background-color: white;
-            padding: 20px;
+            padding: 30px;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
         }
         h1 {
             text-align: center;
@@ -35,37 +35,54 @@
         input[type="file"],
         textarea {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             font-size: 16px;
             border: 1px solid #ccc;
             border-radius: 5px;
+            box-sizing: border-box;
         }
         textarea {
-            height: 200px;
+            height: 250px;
+            resize: vertical;
         }
         button {
-            display: inline-block;
-            padding: 10px 20px;
+            display: block;
+            width: 100%;
+            padding: 15px;
             background-color: #007bff;
             color: white;
-            font-size: 16px;
+            font-size: 18px;
             border: none;
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
+            margin-top: 10px;
         }
         button:hover {
             background-color: #0056b3;
         }
+        .output-section {
+            margin-top: 40px;
+        }
+        .output-section h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
         pre {
             background-color: #f9f9f9;
-            padding: 15px;
+            padding: 20px;
             border: 1px solid #ccc;
             border-radius: 5px;
             overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
-        .output-section {
-            margin-top: 30px;
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            color: #999;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -91,6 +108,10 @@
         </div>
     </div>
 
+    <footer>
+        &copy; 2024 Aayan Infotech ANSYS to DYNA Converter. All rights reserved.
+    </footer>
+
     <script>
         // Parse ANSYS file or text content
         function parseANSFile(content) {
@@ -102,13 +123,15 @@
             let constraints = [];
 
             const nodePattern = /^\s*(\d+)\s+([\d\.-]+)\s+([\d\.-]+)\s+([\d\.-]+)/;
-            const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s]+)/;
+            const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s,]+)/;
             const partPattern = /^\*PART/;
             const materialPattern = /^\*MAT_PLASTIC_KINEMATIC/;
+            const constraintPattern = /^\*BOUNDARY_SPC_SET/;
 
             let i = 0;
             while (i < lines.length) {
                 let line = lines[i].trim();
+                // Skip empty lines and comments
                 if (line === '' || line.startsWith('!') || line.startsWith('$') || line.startsWith('/')) {
                     i++;
                     continue;
@@ -118,8 +141,8 @@
                 if ((match = nodePattern.exec(line))) {
                     nodes.push([match[1], match[2], match[3], match[4]]);
                 } else if ((match = elementPattern.exec(line))) {
-                    let nodeIds = match[6].trim().split(/\s+/);
-                    elements.push([match[1], match[2], match[3], match[4], match[5], nodeIds]);
+                    let nodeIds = match[7].trim().split(/[\s,]+/);
+                    elements.push([match[1], match[2], match[3], match[4], match[5], match[6], ...nodeIds]);
                 } else if (partPattern.test(line)) {
                     let partData = [line];
                     i++;
@@ -138,6 +161,15 @@
                     }
                     materials.push(materialData);
                     continue;
+                } else if (constraintPattern.test(line)) {
+                    let constraintData = [line];
+                    i++;
+                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
+                        constraintData.push(lines[i].trim());
+                        i++;
+                    }
+                    constraints.push(constraintData);
+                    continue;
                 }
                 i++;
             }
@@ -146,7 +178,7 @@
 
         // Generate DYNA output based on parsed data
         function generateDYNAOutput(data) {
-            let output = '*KEYWORD\n\n';
+            let output = '*KEYWORD\n';
 
             // Add nodes
             if (data.nodes.length > 0) {
@@ -154,34 +186,54 @@
                 data.nodes.forEach(([id, x, y, z]) => {
                     output += `${id}, ${x}, ${y}, ${z}\n`;
                 });
-                output += '\n';
             }
 
-            // Add elements as ELEMENT_SHELL
+            // Add elements as ELEMENT_SHELL with 10 columns
             if (data.elements.length > 0) {
                 output += '*ELEMENT_SHELL\n';
-                data.elements.forEach(([elementId, mat, typ, rel, esy, nodeIds]) => {
-                    output += `${elementId}, ${mat}, ${typ}, ${rel}, ${esy}, ${nodeIds.join(', ')}\n`;
+                data.elements.forEach(([elementId, mat, typ, rel, esy, sec, ...nodeIds]) => {
+                    // Ensure we have exactly 10 columns: elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4
+                    // If less than 10 columns, pad with zeros
+                    while (nodeIds.length < 4) {
+                        nodeIds.push('0');
+                    }
+                    // If more than 4 nodes, take the first 4
+                    nodeIds = nodeIds.slice(0, 4);
+                    output += `${elementId},${mat},${typ},${rel},${esy},${sec},${nodeIds.join(',')}\n`;
                 });
-                output += '\n';
             }
 
             // Add parts
             if (data.parts.length > 0) {
                 data.parts.forEach(partLines => {
-                    output += partLines.join('\n') + '\n\n';
+                    output += '*PART\n';
+                    partLines.forEach(line => {
+                        output += `${line}\n`;
+                    });
                 });
             }
 
             // Add materials
             if (data.materials.length > 0) {
                 data.materials.forEach(materialLines => {
-                    output += materialLines.join('\n') + '\n\n';
+                    materialLines.forEach(line => {
+                        output += `${line}\n`;
+                    });
+                });
+            }
+
+            // Add constraints
+            if (data.constraints.length > 0) {
+                output += '*BOUNDARY_SPC_SET\n';
+                data.constraints.forEach(constraintLines => {
+                    constraintLines.forEach(line => {
+                        output += `${line}\n`;
+                    });
                 });
             }
 
             // End of the file
-            output += '*END\n';
+            output += '*END';
 
             return output;
         }
