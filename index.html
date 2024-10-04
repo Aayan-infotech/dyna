@@ -122,11 +122,12 @@
             let materials = [];
             let constraints = [];
 
+            // Define patterns to match different sections
             const nodePattern = /^\s*(\d+)\s+([\d\.-]+)\s+([\d\.-]+)\s+([\d\.-]+)/;
-            const elementPattern = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d\s,]+)/;
-            const partPattern = /^\*PART/;
-            const materialPattern = /^\*MAT_PLASTIC_KINEMATIC/;
-            const constraintPattern = /^\*BOUNDARY_SPC_SET/;
+            const elementPattern = /^\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)/;
+            const partPattern = /^\*PART\b/;
+            const materialPattern = /^\*MAT_PLASTIC_KINEMATIC\b/;
+            const constraintPattern = /^\*BOUNDARY_SPC_SET\b/;
 
             let i = 0;
             while (i < lines.length) {
@@ -139,33 +140,57 @@
 
                 let match;
                 if ((match = nodePattern.exec(line))) {
+                    // Node line: id, x, y, z
                     nodes.push([match[1], match[2], match[3], match[4]]);
                 } else if ((match = elementPattern.exec(line))) {
-                    let nodeIds = match[7].trim().split(/[\s,]+/);
-                    elements.push([match[1], match[2], match[3], match[4], match[5], match[6], ...nodeIds]);
+                    // Element line: 10 columns
+                    // elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4
+                    elements.push([
+                        match[1], match[2], match[3], match[4],
+                        match[5], match[6], match[7], match[8],
+                        match[9], match[10]
+                    ]);
                 } else if (partPattern.test(line)) {
-                    let partData = [line];
+                    // *PART section
+                    let partData = [];
+                    partData.push(line); // *PART
                     i++;
-                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
-                        partData.push(lines[i].trim());
+                    while (i < lines.length) {
+                        let nextLine = lines[i].trim();
+                        if (nextLine === '' || nextLine.startsWith('!') || nextLine.startsWith('$') || nextLine.startsWith('/') || nextLine.startsWith('*')) {
+                            break;
+                        }
+                        partData.push(nextLine);
                         i++;
                     }
                     parts.push(partData);
                     continue;
                 } else if (materialPattern.test(line)) {
-                    let materialData = [line];
+                    // *MAT_PLASTIC_KINEMATIC section
+                    let materialData = [];
+                    materialData.push(line); // *MAT_PLASTIC_KINEMATIC
                     i++;
-                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
-                        materialData.push(lines[i].trim());
+                    while (i < lines.length) {
+                        let nextLine = lines[i].trim();
+                        if (nextLine === '' || nextLine.startsWith('!') || nextLine.startsWith('$') || nextLine.startsWith('/') || nextLine.startsWith('*')) {
+                            break;
+                        }
+                        materialData.push(nextLine);
                         i++;
                     }
                     materials.push(materialData);
                     continue;
                 } else if (constraintPattern.test(line)) {
-                    let constraintData = [line];
+                    // *BOUNDARY_SPC_SET section
+                    let constraintData = [];
+                    constraintData.push(line); // *BOUNDARY_SPC_SET
                     i++;
-                    while (i < lines.length && lines[i].trim() !== '' && !lines[i].trim().startsWith('*')) {
-                        constraintData.push(lines[i].trim());
+                    while (i < lines.length) {
+                        let nextLine = lines[i].trim();
+                        if (nextLine === '' || nextLine.startsWith('!') || nextLine.startsWith('$') || nextLine.startsWith('/') || nextLine.startsWith('*')) {
+                            break;
+                        }
+                        constraintData.push(nextLine);
                         i++;
                     }
                     constraints.push(constraintData);
@@ -191,15 +216,8 @@
             // Add elements as ELEMENT_SHELL with 10 columns
             if (data.elements.length > 0) {
                 output += '*ELEMENT_SHELL\n';
-                data.elements.forEach(([elementId, mat, typ, rel, esy, sec, ...nodeIds]) => {
-                    // Ensure we have exactly 10 columns: elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4
-                    // If less than 10 columns, pad with zeros
-                    while (nodeIds.length < 4) {
-                        nodeIds.push('0');
-                    }
-                    // If more than 4 nodes, take the first 4
-                    nodeIds = nodeIds.slice(0, 4);
-                    output += `${elementId},${mat},${typ},${rel},${esy},${sec},${nodeIds.join(',')}\n`;
+                data.elements.forEach(([elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4]) => {
+                    output += `${elementId},${mat},${typ},${rel},${esy},${sec},${node1},${node2},${node3},${node4}\n`;
                 });
             }
 
