@@ -113,7 +113,7 @@
     </footer>
 
     <script>
-        // Parse ANSYS file or text content
+        // Function to parse ANSYS input
         function parseANSFile(content) {
             const lines = content.split('\n');
             let nodes = [];
@@ -129,30 +129,57 @@
             const materialPattern = /^\*MAT_PLASTIC_KINEMATIC\b/;
             const constraintPattern = /^\*BOUNDARY_SPC_SET\b/;
 
+            // To store unique (SEC, MAT) combinations for PART cards
+            let partMap = new Map();
+            let partIndex = 1; // Starting index for part names (A101, B101, etc.)
+            let partNameLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            let currentPart = '';
+
+            // Iterate through each line to parse data
             let i = 0;
             while (i < lines.length) {
                 let line = lines[i].trim();
-                // Skip empty lines and comments
+
+                // Skip empty lines and comment lines
                 if (line === '' || line.startsWith('!') || line.startsWith('$') || line.startsWith('/')) {
                     i++;
                     continue;
                 }
 
                 let match;
+
+                // Parse NODE data
                 if ((match = nodePattern.exec(line))) {
                     // Node line: id, x, y, z
                     nodes.push([match[1], match[2], match[3], match[4]]);
-                } else if ((match = elementPattern.exec(line))) {
-                    // Element line: 10 columns
-                    // elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4
+                }
+                // Parse ELEMENT_SHELL data
+                else if ((match = elementPattern.exec(line))) {
+                    // Element line: elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4
                     elements.push([
                         match[1], match[2], match[3], match[4],
                         match[5], match[6], match[7], match[8],
                         match[9], match[10]
                     ]);
-                } else if (partPattern.test(line)) {
-                    // *PART section
+
+                    // Map SEC and MAT to create unique PARTs
+                    let sec = match[6];
+                    let mat = match[2];
+                    let key = `${sec}_${mat}`;
+
+                    if (!partMap.has(key)) {
+                        // Generate part name (e.g., A101, B101, ...)
+                        let letter = partNameLetters[Math.floor((partIndex - 1) / 100) % partNameLetters.length];
+                        let number = 100 + (partIndex % 100);
+                        let partName = `${letter}${number}`;
+                        partMap.set(key, { partName: partName, partID: partIndex, sec: sec, mat: mat });
+                        partIndex++;
+                    }
+                }
+                // Parse PART sections (if any additional data needed)
+                else if (partPattern.test(line)) {
                     let partData = [];
+                    // Read lines until the next section or end
                     partData.push(line); // *PART
                     i++;
                     while (i < lines.length) {
@@ -165,8 +192,9 @@
                     }
                     parts.push(partData);
                     continue;
-                } else if (materialPattern.test(line)) {
-                    // *MAT_PLASTIC_KINEMATIC section
+                }
+                // Parse MATERIALS
+                else if (materialPattern.test(line)) {
                     let materialData = [];
                     materialData.push(line); // *MAT_PLASTIC_KINEMATIC
                     i++;
@@ -180,8 +208,9 @@
                     }
                     materials.push(materialData);
                     continue;
-                } else if (constraintPattern.test(line)) {
-                    // *BOUNDARY_SPC_SET section
+                }
+                // Parse BOUNDARY_SPC_SET
+                else if (constraintPattern.test(line)) {
                     let constraintData = [];
                     constraintData.push(line); // *BOUNDARY_SPC_SET
                     i++;
@@ -196,16 +225,29 @@
                     constraints.push(constraintData);
                     continue;
                 }
+
                 i++;
             }
-            return { nodes, elements, parts, materials, constraints };
+
+            // Now, generate PART sections based on partMap
+            let generatedParts = [];
+            partMap.forEach((value, key) => {
+                generatedParts.push({
+                    partName: value.partName,
+                    partID: value.partID,
+                    sec: value.sec,
+                    mat: value.mat
+                });
+            });
+
+            return { nodes, elements, parts: generatedParts, materials, constraints };
         }
 
-        // Generate DYNA output based on parsed data
+        // Function to generate DYNA output
         function generateDYNAOutput(data) {
             let output = '*KEYWORD\n';
 
-            // Add nodes
+            // Add *NODE section
             if (data.nodes.length > 0) {
                 output += '*NODE\n';
                 data.nodes.forEach(([id, x, y, z]) => {
@@ -213,7 +255,7 @@
                 });
             }
 
-            // Add elements as ELEMENT_SHELL with 10 columns
+            // Add *ELEMENT_SHELL section
             if (data.elements.length > 0) {
                 output += '*ELEMENT_SHELL\n';
                 data.elements.forEach(([elementId, mat, typ, rel, esy, sec, node1, node2, node3, node4]) => {
@@ -221,42 +263,41 @@
                 });
             }
 
-            // Add parts
+            // Add *PART sections
             if (data.parts.length > 0) {
-                data.parts.forEach(partLines => {
-                    output += '*PART\n';
-                    partLines.forEach(line => {
-                        output += `${line}\n`;
-                    });
+                data.parts.forEach(part => {
+                    output += `*PART\n${part.partName}\n${part.partID},${part.mat},${part.sec}\n`;
                 });
             }
 
-            // Add materials
+            // Add *MAT_PLASTIC_KINEMATIC sections
             if (data.materials.length > 0) {
-                data.materials.forEach(materialLines => {
-                    materialLines.forEach(line => {
+                data.materials.forEach(material => {
+                    material.forEach(line => {
                         output += `${line}\n`;
                     });
                 });
             }
 
-            // Add constraints
+            // Add *BOUNDARY_SPC_SET section
             if (data.constraints.length > 0) {
                 output += '*BOUNDARY_SPC_SET\n';
-                data.constraints.forEach(constraintLines => {
-                    constraintLines.forEach(line => {
-                        output += `${line}\n`;
+                data.constraints.forEach(constraint => {
+                    constraint.forEach(line => {
+                        // Remove any extra spaces after commas
+                        let formattedLine = line.replace(/\s*,\s*/g, ',');
+                        output += `${formattedLine}\n`;
                     });
                 });
             }
 
-            // End of the file
+            // Add *END
             output += '*END';
 
             return output;
         }
 
-        // Process either file input or text input
+        // Function to process input (file or text)
         function processInput() {
             const fileInput = document.getElementById('fileInput');
             const textInput = document.getElementById('textInput').value;
@@ -280,7 +321,7 @@
             }
         }
 
-        // Display the generated DYNA output
+        // Function to display output
         function displayOutput(content) {
             document.getElementById('output').textContent = content;
         }
